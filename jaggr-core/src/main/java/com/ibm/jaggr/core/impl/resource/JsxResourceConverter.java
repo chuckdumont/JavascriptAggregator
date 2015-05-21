@@ -21,8 +21,23 @@ import com.ibm.jaggr.core.IExtensionInitializer;
 import com.ibm.jaggr.core.resource.IResource;
 import com.ibm.jaggr.core.resource.IResourceConverter;
 
+import org.mozilla.javascript.Context;
+import org.mozilla.javascript.Function;
+import org.mozilla.javascript.NativeObject;
+import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.commonjs.module.Require;
+import org.mozilla.javascript.commonjs.module.RequireBuilder;
+import org.mozilla.javascript.commonjs.module.provider.SoftCachingModuleScriptProvider;
+import org.mozilla.javascript.commonjs.module.provider.UrlModuleSourceProvider;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.FileUtils;
+
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -36,8 +51,14 @@ public class JsxResourceConverter implements IResourceConverter, IExtensionIniti
 	private static final Logger log = Logger.getLogger(sourceClass);
 
 	private static final String JSX_CACHE_DIRNAME = "jsx"; //$NON-NLS-1$
+	private static final String JSXTRANSFORMER_DIRNAME = "JSXTransformer.js"; //$NON-NLS-1$
+	private static final String JSXTRANSFORMER_NAME = "JSXTransformer"; //$NON-NLS-1$
 	private IAggregator aggregator;
 	private File cacheDirectory;
+
+	private Scriptable globalScope;
+	private Scriptable jsxTransformScript;
+	private Function transformFunction;
 
 	/* (non-Javadoc)
 	 * @see com.ibm.jaggr.core.IExtensionInitializer#initialize(com.ibm.jaggr.core.IAggregator, com.ibm.jaggr.core.IAggregatorExtension, com.ibm.jaggr.core.IExtensionInitializer.IExtensionRegistrar)
@@ -53,6 +74,30 @@ public class JsxResourceConverter implements IResourceConverter, IExtensionIniti
 		this.aggregator = aggregator;
 		if (isTraceLogging) {
 			log.exiting(sourceClass, sourceMethod);
+		}
+
+		ArrayList<URI> modulePaths = new ArrayList<URI>(1);
+		try {
+			modulePaths.add(JsxResourceConverter.class.getClassLoader().getResource(JSXTRANSFORMER_DIRNAME).toURI());
+		} catch (URISyntaxException e) {
+			// TODO we should probably log something here, shouldnt we.
+		}
+
+		Context ctx = Context.enter();
+		try {
+			// make a require builder and initialize scope
+			RequireBuilder builder = new RequireBuilder();
+			builder.setModuleScriptProvider(new SoftCachingModuleScriptProvider(
+				new UrlModuleSourceProvider(modulePaths, null)
+			));
+			globalScope = ctx.initStandardObjects();
+			Require require = builder.createRequire(ctx, globalScope);
+
+			// require in the transformer and extract the transform function
+			jsxTransformScript = require.requireMain(ctx, JSXTRANSFORMER_NAME);
+			transformFunction = (Function) jsxTransformScript.get("transform", globalScope); //$NON-NLS-1$
+		} finally {
+			Context.exit();
 		}
 	}
 
@@ -126,7 +171,28 @@ public class JsxResourceConverter implements IResourceConverter, IExtensionIniti
 		if (isTraceLogging) {
 			log.entering(sourceMethod, sourceMethod, new Object[]{jsxRes, target});
 		}
-		boolean result = false;	// not yet implemented
+
+		boolean result;
+		Context ctx = Context.enter();
+		try {
+			// read the contents of the jsx file and convert it
+			String jsx = IOUtils.toString(jsxRes.getInputStream());
+			NativeObject convertedJSX;
+			String jsstring;
+			synchronized (this) {
+				convertedJSX = (NativeObject) transformFunction.call(ctx, globalScope, jsxTransformScript, new String[]{jsx});
+				// write the contents of the transformed javascript to the target file
+				jsstring = convertedJSX.get("code").toString();  //$NON-NLS-1$
+			}
+			FileUtils.writeStringToFile(target, jsstring);
+			result = true;
+		} catch (IOException e) {
+			// TODO we should probably log something here?
+			result = false;
+		} finally {
+			Context.exit();
+		}
+
 		if (isTraceLogging) {
 			log.exiting(sourceClass, sourceMethod, result);
 		}
