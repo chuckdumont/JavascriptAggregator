@@ -458,6 +458,7 @@ public abstract class AbstractAggregatorImpl extends HttpServlet implements IAgg
 				setResourceResponseCacheHeaders(req, resp, resolved, isNoCache);
 				String contentType = getContentType(resolved.getPath());
 				resp.setHeader("Content-Type", contentType); //$NON-NLS-1$
+				resp.setDateHeader("Last-Modified", resolved.lastModified()); //$NON-NLS-1$
 
 				InputStream is = null;
 				if (RequestUtil.isGzipEncoding(req) && !contentType.startsWith("image/")) { //$NON-NLS-1$
@@ -761,24 +762,28 @@ public abstract class AbstractAggregatorImpl extends HttpServlet implements IAgg
 		} else {
 			result = new NotFoundResource(uriRef.getValue());
 		}
-		result = convertResource(uri, result);
+		result = runConverters(result);
 		if (isTraceLogging) {
 			log.exiting(AbstractAggregatorImpl.class.getName(), sourceMethod, result);
 		}
 		return result;
 	}
 
-	protected IResource convertResource(URI uri, IResource resource) {
+	/* (non-Javadoc)
+	 * @see com.ibm.jaggr.core.IAggregator#runConverters(com.ibm.jaggr.core.resource.IResource)
+	 */
+	@Override
+	public IResource runConverters(IResource resource) {
 		final String sourceMethod = "convertResource";  //$NON-NLS-1$
 		boolean isTraceLogging = log.isLoggable(Level.FINER);
 		if (isTraceLogging) {
-			log.entering(AbstractAggregatorImpl.class.getName(), sourceMethod, new Object[]{uri, resource});
+			log.entering(AbstractAggregatorImpl.class.getName(), sourceMethod, new Object[]{resource});
 		}
 		IResource result = resource;
 		Iterable<IAggregatorExtension> extensions = getExtensions(IResourceConverterExtensionPoint.ID);
 		if (extensions != null) {	// may be null when unit testing
 			for (IAggregatorExtension extension : extensions) {
-				result = ((IResourceConverter)extension.getInstance()).convert(uri, result);
+				result = ((IResourceConverter)extension.getInstance()).convert(result);
 			}
 		}
 		if (isTraceLogging) {
@@ -1526,8 +1531,8 @@ public abstract class AbstractAggregatorImpl extends HttpServlet implements IAgg
 		// caches, etc.
 		OverrideFoldersTreeWalker walker = new OverrideFoldersTreeWalker(this, config);
 		walker.walkTree();
-		deps = newDependencies(walker.getLastModifiedJS());
 		cacheMgr = newCacheManager(walker.getLastModified());
+		deps = newDependencies(walker.getLastModifiedJS());
 		resourcePaths = getPathsAndAliases(getInitParams());
 
 		// Notify listeners

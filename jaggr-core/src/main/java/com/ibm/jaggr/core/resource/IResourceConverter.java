@@ -15,7 +15,6 @@
  */
 package com.ibm.jaggr.core.resource;
 
-import java.net.URI;
 
 /**
  * Interface to convert one resource into another.
@@ -26,17 +25,12 @@ public interface IResourceConverter {
 	/**
 	 * Converts the input resource into an output resource.
 	 *
-	 * @param uri
-	 *            The requested URI. Not necessarily the same as the value returned by the
-	 *            resource's {@link IResource#getURI()} method. For example, the URI may specify a
-	 *            bundleresourceentry scheme, but the resource's {@code getUri()} method may point
-	 *            to an extracted file on the file system.
 	 * @param resource
 	 *            The {@link IResource} object for the requested resource.  If the resource does
 	 *            not exist, then {@link IResource#equals(Object)} will return false.
 	 *
 	 * @return the output resource (may be the same as {@code resource}).
 	 */
-	public IResource convert(URI uri, IResource resource);
+	public IResource convert(IResource resource);
 
 }
