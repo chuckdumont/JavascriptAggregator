@@ -402,6 +402,7 @@ public class DojoHttpTransport extends AbstractHttpTransport implements IHttpTra
 	 * Handles the
 	 * {@link com.ibm.jaggr.core.transport.IHttpTransport.LayerContributionType#END_MODULES}
 	 * layer listener event.
+	 * <p>
 	 * See {@link #beginModules(HttpServletRequest, Object)}
 	 *
 	 * @param request
