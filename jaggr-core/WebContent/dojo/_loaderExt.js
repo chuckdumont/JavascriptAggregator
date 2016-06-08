@@ -328,8 +328,14 @@ combo.isDefined = function(name) {
  * order responses.  The order dependency comes from the cumulative exclude list used to exclude previously 
  * requested modules.
  */
-combo.defineModules = function(modules, callback) {
+combo.defineModules = function(modules, indices, callback) {
   
+	// fix up arguments if optional indices is not specified
+	if (!callback) {
+		callback = indices;
+		indices = null;
+	}
+	
 	// Returns true if ary1 and ary2 contain the same elements
 	var arraysEqual = function(ary1, ary2) {
 		if (ary1.length !== ary2.length) return false;
@@ -337,6 +343,20 @@ combo.defineModules = function(modules, callback) {
 			if (ary1[i] !== ary2[i]) return false;
 		}
 		return true;
+	};
+	
+	// Returns the array of module names that are defined in the response
+	// mids - array of module names that were requested
+	// indices - array of indices into mids of modules defined in the response
+	var getDefinedNames = function(mids, indices) {
+		if (!indices) {
+			return mids;
+		}
+		var result = [];
+		for (var i = 0; i < indices.length; i++) {
+			result.push(mids[indices[i]]);
+		}
+		return result;
 	};
 
 	var index = -1, pendingLoad;
@@ -364,6 +384,11 @@ combo.defineModules = function(modules, callback) {
 		// have already completed.
 		var callbacks = [callback];     // array of define modules callbacks to run
 		var mids = pendingLoads[0].mids;
+		if (indices) {
+		  var definedMids = getDefinedNames(mids, indices);
+		  mids.splice(0, mids.length);
+		  Array.prototype.push.apply(mids, definedMids);
+		}
 		pendingLoads.shift();           // Remove head from list
 		while (pendingLoads.length) {  // gather up adjacent completed responses
 			pendingLoad = pendingLoads[0];
@@ -375,7 +400,7 @@ combo.defineModules = function(modules, callback) {
 			// loader that allows us to modify the array we passed to the combo.done() load 
 			// callback after the fact and the loader will use the updated array to identify
 			// the modules that are about to be defined.
-			Array.prototype.push.apply(mids, pendingLoad.mids);
+			Array.prototype.push.apply(mids, getDefinedNames(pendingLoad.mids, pendingLoad.indices));
 			// Add the define modules callback for the queued response to the list
 			callbacks.push(pendingLoad.cb);
 			pendingLoads.shift(); // remove head from the queue
@@ -390,6 +415,9 @@ combo.defineModules = function(modules, callback) {
 		// in request order.
 		pendingLoad = pendingLoads[index];
 		pendingLoad.cb = callback;
+		pendingLoad.indices = indices;
+		// Create a new copy of the array, clearing out the contents of the array that is 
+		// referenced by the loader.
 		pendingLoad.mids = pendingLoad.mids.splice(0, pendingLoad.mids.length);
 	}
 };

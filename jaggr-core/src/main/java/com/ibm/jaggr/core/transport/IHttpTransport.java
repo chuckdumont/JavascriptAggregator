@@ -23,7 +23,6 @@ import com.ibm.jaggr.core.module.IModule;
 import com.ibm.jaggr.core.modulebuilder.ModuleBuild;
 import com.ibm.jaggr.core.resource.IResource;
 import com.ibm.jaggr.core.resource.IResourceFactory;
-import com.ibm.jaggr.core.transport.IRequestedModuleNames;
 
 import java.io.IOException;
 import java.util.List;
@@ -399,9 +398,15 @@ public interface IHttpTransport extends IExtensionInitializer {
 	 *            <li>{@link LayerContributionType#END_LAYER_MODULES}</li>
 	 *            </ul>
 	 *            For the following values of {@code type}, {@code arg} specifies
-	 *            a {@code Set<String>} of modules that were explicitly requested
+	 *            a {@code List<String>} of modules that were explicitly requested
 	 *            by the loader (i.e. the modules specified in the {@code modules}
-	 *            or {@code moduleIds} request parameter.
+	 *            or {@code moduleIds} request parameter.  Some or all of the list
+	 *            entries may be null if modules are excluded by the request.  The
+	 *            positions of the module names in the list match the positions of
+	 *            the module names in the request, with null entries identifying
+	 *            excluded modules.  Excluded modules may be identified by querying
+	 *            the entries at indices corresponding to the null names in
+	 *            {@link IRequestedModuleNames#getModules()}.
 	 *            <ul>
 	 *            <li>{@link LayerContributionType#BEGIN_MODULES}</li>
 	 *            <li>{@link LayerContributionType#END_MODULES}</li>

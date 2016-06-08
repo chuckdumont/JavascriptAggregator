@@ -16,6 +16,7 @@
 
 package com.ibm.jaggr.core.impl.transport;
 
+import com.ibm.jaggr.core.BadRequestException;
 import com.ibm.jaggr.core.IAggregator;
 import com.ibm.jaggr.core.IAggregatorExtension;
 import com.ibm.jaggr.core.IExtensionInitializer;
@@ -33,6 +34,7 @@ import com.ibm.jaggr.core.resource.IResourceFactoryExtensionPoint;
 import com.ibm.jaggr.core.transport.IHttpTransport;
 import com.ibm.jaggr.core.util.RequestUtil;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 
 import org.mozilla.javascript.Context;
@@ -217,13 +219,6 @@ public class DojoHttpTransport extends AbstractHttpTransport implements IHttpTra
 	 */
 	protected String beforeModule(HttpServletRequest request, ModuleInfo info) {
 		StringBuffer sb = new StringBuffer();
-		if (RequestUtil.isServerExpandedLayers(request)) {
-			// If doing server expansion of required modules, then need to add check to see if
-			// module is already defined to avoid potential for multiple define module errors.
-			sb.append("!require.combo.isDefined('") //$NON-NLS-1$
-			  .append(info.getModuleId())
-			  .append("')&&"); //$NON-NLS-1$
-		}
 		if (!info.isScript()) {
 			// Text module.  Wrap in AMD define function call
 			sb.append("define("); //$NON-NLS-1$
@@ -336,7 +331,7 @@ public class DojoHttpTransport extends AbstractHttpTransport implements IHttpTra
 	 * method, wraps the module definitions within the <code>require.combo.defineModules</code> function
 	 * call as follows:
 	 * <pre>
-	 * require.combo.defineModules(['mid1', 'mid2', ...], function() {
+	 * require.combo.defineModules(['mid1', 'mid2', ...], [1, 2,...], function() {
 	 *    define([...], function(...) {
 	 *    	...
 	 *    });
@@ -346,7 +341,13 @@ public class DojoHttpTransport extends AbstractHttpTransport implements IHttpTra
 	 *    ...
 	 * });
 	 * </pre>
-	 *
+	 * Note that the second parameter in the previous example (the integer array) is optional and is
+	 * specified only if some of the requested modules were excluded from the response.  In this case,
+	 * the array specifies the indices in the previous array (the first parameter) of the names of the
+	 * modules that are included in the response.  This is done so that the requested module list (the
+	 * first parameter) can be unaffected by excluded modules and therefore be used by the client code
+	 * as an identifier that allows it to associate this response with the corresponding request.
+	 * <p>
 	 * @param request
 	 *            the http request object
 	 * @param arg
@@ -364,13 +365,35 @@ public class DojoHttpTransport extends AbstractHttpTransport implements IHttpTra
 		if (RequestUtil.isServerExpandedLayers(request) &&
 				request.getParameter(REQUESTEDMODULESCOUNT_REQPARAM) != null) {  // it's a loader generated request
 			@SuppressWarnings("unchecked")
-			Set<String> modules = (Set<String>)arg;
+			List<String> modules = (List<String>)arg;
 			sb.append("require.combo.defineModules(["); //$NON-NLS-1$
-			int i = 0;
-			for (String module : modules) {
-				sb.append(i++ > 0 ? "," : "").append("'").append(module).append("'"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+			RequestedModuleNames requested = (RequestedModuleNames)request.getAttribute(IHttpTransport.REQUESTEDMODULENAMES_REQATTRNAME);
+			List<String> names;
+			try {
+				names = requested.getModules();
+			} catch (BadRequestException ex) {
+				// Should not happen.  If request was bad, we should never get this far.
+				throw new IllegalStateException(ex);
 			}
-			sb.append("], function(){\r\n"); //$NON-NLS-1$
+			if (names.size() != modules.size()) {	// sanity check
+				throw new IllegalStateException("Names list size mismatch: " + names.toString() + " vs. " + modules.toString()); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+			// Build the module list name.  This is used by the client code to identify the request and must
+			// match the modules that were requested by the loader.
+			List<Integer> indecies = new ArrayList<Integer>(names.size());
+			for (int i = 0; i < names.size(); i++) {
+				sb.append(i > 0 ? "," : "").append("'").append(names.get(i)).append("'"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+				if (modules.get(i) != null) {
+					indecies.add(i);
+				}
+			}
+			sb.append("],"); //$NON-NLS-1$
+			// If there were excluded modules, then the next parameter is an array of integers specifying the
+			// Indices in the previous array of the names of the modules that are included in the response
+			if (indecies.size() != names.size()) {
+				sb.append("[").append(Joiner.on(",").join(indecies)).append("],"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			}
+			sb.append("function(){\r\n"); //$NON-NLS-1$
 		}
 		return sb.toString();
 	}
@@ -379,7 +402,7 @@ public class DojoHttpTransport extends AbstractHttpTransport implements IHttpTra
 	 * Handles the
 	 * {@link com.ibm.jaggr.core.transport.IHttpTransport.LayerContributionType#END_MODULES}
 	 * layer listener event.
-	 * @see {@link #beginModules(HttpServletRequest, Object)}
+	 * See {@link #beginModules(HttpServletRequest, Object)}
 	 *
 	 * @param request
 	 *            the http request object

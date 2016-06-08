@@ -128,11 +128,11 @@ public class LayerBuilderTest {
 							return "]";
 						case BEGIN_MODULES:
 							return new StringBuffer("(`")
-								.append(Joiner.on(",").join((Set<String>)arg))
+								.append(Joiner.on(",").join((List<String>)arg))
 								.append("`").toString();
 						case END_MODULES:
 							return new StringBuffer("'")
-								.append(Joiner.on(",").join((Set<String>)arg))
+								.append(Joiner.on(",").join((List<String>)arg))
 						        .append("')").toString();
 						case BEFORE_FIRST_MODULE:
 							return "\"<"+((ModuleInfo)arg).getModuleId()+">";

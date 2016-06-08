@@ -39,5 +39,10 @@ public enum ModuleSpecifier {
 	/**
 	 * The module was added by a module builder.
 	 */
-	BUILD_ADDED
+	BUILD_ADDED,
+	/**
+	 * The module that is excluded but who's place in the request order none-the-less needs
+	 * to be maintained.
+	 */
+	EXCLUDED
 }

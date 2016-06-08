@@ -28,6 +28,7 @@ import com.ibm.jaggr.core.layer.ILayerListener;
 import com.ibm.jaggr.core.layer.ILayerListener.EventType;
 import com.ibm.jaggr.core.module.IModule;
 import com.ibm.jaggr.core.module.IModuleCache;
+import com.ibm.jaggr.core.module.ModuleSpecifier;
 import com.ibm.jaggr.core.modulebuilder.ModuleBuildFuture;
 import com.ibm.jaggr.core.modulebuilder.SourceMap;
 import com.ibm.jaggr.core.options.IOptions;
@@ -55,7 +56,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -197,19 +197,21 @@ public class LayerBuilder {
 
 			// Now add the loader requested modules
 			if (sorted.getModules().size() > 0) {
-				Set<String> mids = new LinkedHashSet<String>();
-				for (IModule module : sorted.getModules().keySet()) {
-					mids.add(module.getModuleId());
+				List<String> mids = new ArrayList<String>(sorted.getModules().size());
+				for (Map.Entry<IModule, ModuleBuildReader> entry : sorted.getModules().entrySet()) {
+					mids.add(entry.getValue() != null ? entry.getKey().getModuleId() : null);
 				}
 				addTransportContribution(LayerContributionType.BEGIN_MODULES, mids);
 				int i = 0;
 				for (Map.Entry<IModule, ModuleBuildReader> entry : sorted.getModules().entrySet()) {
-					writer.append(notifyLayerListeners(EventType.BEGIN_MODULE, request, entry.getKey()));
-					ModuleInfo info = new ModuleInfo(entry.getKey().getModuleId(), entry.getValue().isScript());
-					LayerContributionType type = (i++ == 0) ? LayerContributionType.BEFORE_FIRST_MODULE : LayerContributionType.BEFORE_SUBSEQUENT_MODULE;
-					addTransportContribution(type, info);
-					processReader(entry.getKey(), entry.getValue());
-					addTransportContribution(LayerContributionType.AFTER_MODULE, info);
+					if (entry.getValue() != null) {
+						writer.append(notifyLayerListeners(EventType.BEGIN_MODULE, request, entry.getKey()));
+						ModuleInfo info = new ModuleInfo(entry.getKey().getModuleId(), entry.getValue().isScript());
+						LayerContributionType type = (i++ == 0) ? LayerContributionType.BEFORE_FIRST_MODULE : LayerContributionType.BEFORE_SUBSEQUENT_MODULE;
+						addTransportContribution(type, info);
+						processReader(entry.getKey(), entry.getValue());
+						addTransportContribution(LayerContributionType.AFTER_MODULE, info);
+					}
 				}
 				addTransportContribution(LayerContributionType.END_MODULES, mids);
 			}
@@ -422,7 +424,11 @@ public class LayerBuilder {
 			IModule module = moduleListEntry.getModule();
 			Future<ModuleBuildReader> future = null;
 			try {
-				future = moduleCache.getBuild(request, module);
+				if (moduleListEntry.getSource() == ModuleSpecifier.EXCLUDED) {
+					future = new CompletedFuture<ModuleBuildReader>(null);
+				} else {
+					future = moduleCache.getBuild(request, module);
+				}
 			} catch (NotFoundException e) {
 				if (log.isLoggable(Level.FINER)) {
 					log.logp(Level.FINER, sourceClass, sourceMethod, moduleListEntry.getModule().getModuleId() + " not found."); //$NON-NLS-1$

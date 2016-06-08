@@ -79,10 +79,11 @@ public class SortedReaders {
 				cacheEntries.put(module, reader);
 				break;
 			case MODULES:
+			case EXCLUDED:
 				modules.put(module, reader);
 				break;
 			}
-			if (!noAddModules) {
+			if (!noAddModules && reader != null) {
 				for (ModuleBuildFuture extra : reader.getExtraBuilds()) {
 					sortFuture(extra);
 				}

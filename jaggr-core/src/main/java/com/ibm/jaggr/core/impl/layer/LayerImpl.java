@@ -970,6 +970,25 @@ public class LayerImpl implements ILayer {
 						}
 					}
 				}
+				if (RequestUtil.isServerExpandedLayers(request)) {
+					// Change the source of ModuleSpecifier.MODULES entries with ModuleSpecifier.EXCLUDED if
+					// the module is in the exclude list.
+					for (int i = 0; i < result.size(); i++) {
+						ModuleList.ModuleListEntry entry = result.get(i);
+						if (entry.getSource() == ModuleSpecifier.MODULES) {
+							String mid = entry.getModule().getModuleId();
+							if (excludeList != null && (excludeList.getExplicitDeps().containsKey(mid) ||
+								excludeList.getExpandedDeps().containsKey(mid))) {
+								// Update entry type
+								result.set(i, new ModuleList.ModuleListEntry(newModule(request, mid), ModuleSpecifier.EXCLUDED));
+							}
+						} else {
+							// Entries of source ModuleSpecifier.MODULES are first in the result list so we don't
+							// need to keep iterating if we encounter an entry of a different source.
+							break;
+						}
+					}
+				}
 				if ((moduleList != null || requiredList != null || preloadList != null) && isDepExpLogging) {
 					ModuleDeps expanded = new ModuleDeps();
 					if (requiredList != null) {
